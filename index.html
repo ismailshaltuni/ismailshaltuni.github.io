@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#F5F6F3">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
 <!-- Created 2026-10-26 · v10: first-screen calculator, sliders, one-line range that glides, segmented HQ control. Formula = micro1.ai/data-payout (reverse-engineered, within $5). Backups v7–v9 kept alongside. -->
+<!-- Created 2026-10-26 · v10: first-screen calculator, sliders, one-line range that glides, segmented HQ control. Formula = micro1.ai/data-payout (reverse-engineered, within $5). Backups v7–v9 kept alongside. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap">
@@ -50,7 +51,11 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(38px,6vw,64px);lin
 .row{display:flex;flex-direction:column;gap:12px;min-width:0}
 .row-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .row-head label,.row-head span.q{font-weight:600;font-size:17px}
-.val{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.val{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap;
+  width:7ch;text-align:right;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--ink);padding:0 2px;-moz-appearance:textfield;transition:border-color .2s var(--ease)}
+.val::-webkit-outer-spin-button,.val::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.val:hover{border-bottom-color:var(--line)}
+.val:focus{outline:none;border-bottom-color:var(--ledger)}
 .note{font-size:14px;color:var(--muted);margin:0;min-height:1.5em}
 .note.warn{color:var(--stop)}
 
@@ -102,13 +107,13 @@ footer a{color:inherit;text-underline-offset:3px}
   <section class="panel" aria-label="Revenue estimate">
     <form class="controls" id="calc" novalidate>
       <div class="row">
-        <div class="row-head"><label for="emp">Employees</label><output class="val" id="emp-v" for="emp">50</output></div>
-        <input type="range" id="emp" min="0" max="24" step="1" value="8" aria-describedby="emp-n">
+        <div class="row-head"><label for="emp-v">Employees</label><input class="val" id="emp-v" type="number" inputmode="numeric" min="1" max="100000" step="1" value="50" aria-describedby="emp-n"></div>
+        <input type="range" id="emp" min="0" max="1000" step="1" value="425" aria-label="Employees slider" aria-describedby="emp-n">
         <p class="note" id="emp-n">20+ office staff qualifies. 50+ is strongest.</p>
       </div>
       <div class="row">
-        <div class="row-head"><label for="yrs">Years of records</label><output class="val" id="yrs-v" for="yrs">10</output></div>
-        <input type="range" id="yrs" min="1" max="50" step="1" value="10">
+        <div class="row-head"><label for="yrs-v">Years of records</label><input class="val" id="yrs-v" type="number" inputmode="numeric" min="1" max="150" step="1" value="10"></div>
+        <input type="range" id="yrs" min="1" max="50" step="1" value="10" aria-label="Years slider">
         <p class="note">Usually the years you've been in business.</p>
       </div>
       <fieldset class="row" style="border:0;margin:0;padding:0;min-width:0">
@@ -143,12 +148,16 @@ footer a{color:inherit;text-underline-offset:3px}
 
 <script>
 (function(){
-  const EMP=[5,10,15,20,25,30,40,50,60,75,100,125,150,200,250,300,400,500,750,1000,1500,2000,3000,5000,10000];
+  // Employees slider is logarithmic (1 to 10,000) so every small number is reachable; the number itself is typeable for exact values.
+  const LMAX=Math.log(10000);
+  const toE=t=>Math.max(1,Math.round(Math.exp(t/1000*LMAX)));
+  const toT=e=>Math.round(Math.log(Math.min(10000,Math.max(1,e)))/LMAX*1000);
   const emp=document.getElementById('emp'), yrs=document.getElementById('yrs');
   const empV=document.getElementById('emp-v'), yrsV=document.getElementById('yrs-v'), empN=document.getElementById('emp-n');
   const fig=document.getElementById('fig'), seg=document.getElementById('seg'), pill=document.getElementById('pill');
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  emp.max=EMP.length-1; emp.value=EMP.indexOf(50);
+  let E=50, Y=10;
+  emp.value=toT(E);
 
   // Matches micro1.ai/data-payout (US) within $5; Canada/Europe x0.75, Other x0.30.
   function payout(e,y,m){const p=e*y;
@@ -169,9 +178,7 @@ footer a{color:inherit;text-underline-offset:3px}
     pill.style.transform='translateX('+(i*100)+'%)';
   }
   function update(){
-    const e=EMP[+emp.value], y=+yrs.value, m=+document.querySelector('input[name="hq"]:checked').value;
-    empV.textContent=e.toLocaleString('en-US')+(+emp.value===EMP.length-1?'+':'');
-    yrsV.textContent=y+(y===50?'+':'');
+    const e=E, y=Y, m=+document.querySelector('input[name="hq"]:checked').value;
     empN.textContent= e<20 ? 'Under 20 office staff is usually below the minimum.' : '20+ office staff qualifies. 50+ is strongest.';
     empN.classList.toggle('warn',e<20);
     fill(emp); fill(yrs); movePill();
@@ -179,7 +186,13 @@ footer a{color:inherit;text-underline-offset:3px}
     if(!cur||reduce){cur=target.slice();draw();return;}
     if(!raf) raf=requestAnimationFrame(tick);
   }
-  emp.addEventListener('input',update); yrs.addEventListener('input',update);
+  const typed=(el,max)=>{const n=Math.floor(Number(el.value));return Number.isFinite(n)&&n>=1?Math.min(max,n):null;};
+  emp.addEventListener('input',()=>{E=toE(+emp.value);empV.value=E;update();});
+  yrs.addEventListener('input',()=>{Y=+yrs.value;yrsV.value=Y;update();});
+  empV.addEventListener('input',()=>{const n=typed(empV,100000);if(n){E=n;emp.value=toT(n);update();}});
+  yrsV.addEventListener('input',()=>{const n=typed(yrsV,150);if(n){Y=n;yrs.value=Math.min(50,n);update();}});
+  empV.addEventListener('blur',()=>{empV.value=E;}); yrsV.addEventListener('blur',()=>{yrsV.value=Y;});
+  [empV,yrsV].forEach(el=>el.addEventListener('focus',()=>el.select()));
   seg.addEventListener('change',update);
   update();
 })();
